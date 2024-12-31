@@ -2,6 +2,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "unistd.h"
+#include <stdio.h>
 
 void get_memory_usage(double *total, double *used) {
   FILE *fp = fopen("/proc/meminfo", "r");
@@ -73,7 +74,41 @@ void get_uptime(double *uptime, double *idle_time) {
   fclose(fp);
 }
 
+void get_os_info(char *os, size_t size) {
+  FILE *fp = fopen("/etc/os-release", "r");
+  if (!fp) {
+    perror("fopen");
+    exit(EXIT_FAILURE);
+  }
+
+  char line[256];
+  while (fgets(line, sizeof(line), fp)) {
+    if (strncmp(line, "NAME=", 5) == 0) {
+      char *start = strchr(line, '=');
+      if (start) {
+        start++;
+        char *end = strrchr(start, '\n');
+        if (end)
+          *end = '\0';
+
+        if (start[0] == '"' || start[0] == '\'')
+          start++;
+        char *quote_end = strrchr(start, start[-1]);
+        if (quote_end)
+          *quote_end = '\0';
+
+        strncpy(os, start, size - 1);
+        os[size - 1] = '\0';
+      }
+      break;
+    }
+  }
+
+  fclose(fp);
+}
+
 int main() {
+  char os[128];
   unsigned long long idle1, total1, idle2, total2;
   double total_ram, used_ram, uptime, idle_time;
   int refresh_interval = 2; // Refresh every 2 seconds
@@ -95,10 +130,12 @@ int main() {
     int minutes = ((int)uptime % 3600) / 60;
     int seconds = (int)uptime % 60;
 
+    get_os_info(os, sizeof(os));
+
     system("clear");
 
-    printf("CPU: %.2f%%\tRAM: %.2fMB/%.2f\t Uptime: %dh, %dm, %ds\n", cpu_usage,
-           used_ram, total_ram, hours, minutes, seconds);
+    printf("CPU: %.2f%%\tRAM: %.2fMB/%.2f\t Uptime: %dh, %dm, %ds\tOS: %s\n",
+           cpu_usage, used_ram, total_ram, hours, minutes, seconds, os);
 
     sleep(refresh_interval);
   }
